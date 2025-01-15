@@ -1,0 +1,68 @@
+const express = require('express');
+const axios = require('axios');
+const http = require('http');
+const { Server } = require('socket.io');
+
+const app = express();
+const PORT = 3000;
+const server = http.createServer(app);
+const io = new Server(server);
+
+app.set('view engine', 'ejs');
+
+// In-memory alerts storage
+const alerts = []; // Example: [{ symbol: 'NEXO', targetPrice: 2, user: 'User1' }]
+
+// Serve the EJS file
+app.get("/", (req, res) => {
+    res.render('prices');
+});
+
+// Fetch and emit prices periodically
+setInterval(async () => {
+    try {
+        const response = await axios.get("https://api.coingecko.com/api/v3/coins/markets", {
+            params: {
+                vs_currency: 'usd',
+                order: "market_cap_desc",
+                limit: 10,
+                sparkline: false,
+                price_change_percentage: "24h"
+            }
+        });
+
+        const prices = response.data;
+        io.emit('priceUpdate', prices);
+
+        // Check for alerts
+        alerts.forEach(alert => {
+            const coin = prices.find(c => c.symbol.toUpperCase() === alert.symbol.toUpperCase());
+            if (coin && coin.current_price >= alert.targetPrice) {
+                // Trigger alert
+                io.to(alert.user).emit('priceAlert', { 
+                    message: `Alert! ${alert.symbol} has reached $${alert.targetPrice}. Current Price: $${coin.current_price}` 
+                });
+            }
+        });
+    } catch (error) {
+        console.error("Failed to fetch data:", error.message);
+    }
+}, 15000);
+
+io.on('connection', (socket) => {
+    console.log('A user connected:', socket.id);
+
+    // Listen for new alert
+    socket.on('setAlert', (data) => {
+        console.log('Setting alert:', data);
+        alerts.push({ ...data, user: socket.id }); // Store alert with user's socket ID
+    });
+
+    socket.on('disconnect', () => {
+        console.log('A user disconnected:', socket.id);
+    });
+});
+
+server.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});

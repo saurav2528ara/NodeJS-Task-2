@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Crypto Prices</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        table {
+            width: 80%;
+            margin: 20px auto;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f4f4f4;
+        }
+        .alert-form {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .notification {
+            background-color: #ffeb3b;
+            color: #333;
+            padding: 10px;
+            margin: 10px auto;
+            text-align: center;
+            width: 50%;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <h1 style="text-align: center;">Cryptocurrency Prices</h1>
+    
+    <!-- Alert Form -->
+    <div class="alert-form">
+        <h2>Set Price Alert</h2>
+        <label for="cryptoSymbol">Symbol:</label>
+        <input type="text" id="cryptoSymbol" placeholder="e.g., NEXO">
+        <label for="targetPrice">Target Price (USD):</label>
+        <input type="number" id="targetPrice" step="0.01" placeholder="e.g., 2.00">
+        <button onclick="setAlert()">Set Alert</button>
+    </div>
+    
+    <!-- Notifications -->
+    <div id="notifications"></div>
+
+    <table id="cryptoTable">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Symbol</th>
+                <th>Current Price (USD)</th>
+                <th>24h Change (%)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Data will be dynamically populated here -->
+        </tbody>
+    </table>
+
+    <script>
+        const socket = io();
+
+        // Listen for price updates
+        socket.on('priceUpdate', (data) => {
+            const tableBody = document.querySelector("#cryptoTable tbody");
+            tableBody.innerHTML = ""; // Clear existing rows
+
+            data.forEach(coin => {
+                const row = document.createElement("tr");
+                row.innerHTML = `
+                    <td>${coin.name}</td>
+                    <td>${coin.symbol.toUpperCase()}</td>
+                    <td>$${coin.current_price.toFixed(2)}</td>
+                    <td>${coin.price_change_percentage_24h.toFixed(2)}%</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        });
+
+        // Listen for alerts
+        socket.on('priceAlert', (alert) => {
+            const notifications = document.getElementById("notifications");
+            const notification = document.createElement("div");
+            notification.className = "notification";
+            notification.textContent = alert.message;
+            notifications.appendChild(notification);
+
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                notifications.removeChild(notification);
+            }, 5000);
+        });
+
+        // Set alert
+        function setAlert() {
+            const symbol = document.getElementById("cryptoSymbol").value.trim();
+            const targetPrice = parseFloat(document.getElementById("targetPrice").value);
+
+            if (symbol && targetPrice) {
+                socket.emit('setAlert', { symbol, targetPrice });
+                alert(`Alert set for ${symbol} at $${targetPrice}`);
+            } else {
+                alert("Please enter a valid symbol and target price.");
+            }
+        }
+    </script>
+</body>
+</html>
